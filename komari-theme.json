@@ -1,8 +1,8 @@
 {
   "name": "Komari Naive Custom",
-  "short": "Naive Custom",
+  "short": "Naive-Custom",
   "description": "A naive-ui theme for Komari",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "author": "jiajiaxd",
   "url": "https://github.com/jiajiaxd/komari-theme-naive",
   "preview": "preview.png",

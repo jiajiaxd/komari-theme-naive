@@ -26,6 +26,7 @@
       { "key": "lightCardContrast", "name": "亮色卡片高对比度", "type": "switch", "default": false, "help": "启用后，在亮色模式下为卡片添加阴影和边框，增强与背景的对比度" },
       { "key": "cardProgressLayout", "name": "卡片进度条布局", "type": "select", "default": "2col", "options": "1col,2col", "help": "节点卡片中进度条的布局方式：1col 为一行一列，2col 为一行两列" },
       { "key": "tagsInSeparateRow", "name": "标签单独一行显示", "type": "switch", "default": false, "help": "启用后，自定义标签和价格标签将在运行时间上方单独一行常驻显示，而非 hover 时显示" },
+      { "key": "showRemainingValue", "name": "显示剩余价值", "type": "switch", "default": true, "help": "在节点卡片和列表标签中显示按剩余天数折算的剩余价值" },
       { "key": "uptimeTagWrap", "name": "使用 Tag 包裹运行时间", "type": "switch", "default": false, "help": "启用后，运行时间将使用 Tag 组件包裹显示，使用紫色作为标签颜色" },
       { "key": "trafficSplitColor", "name": "流量统计分离颜色", "type": "switch", "default": true, "help": "启用后，Card 视图下流量进度条下方的流量统计将使用绿色（上行）和蓝色（下行）区分显示" },
       { "name": "列表视图", "type": "title" },

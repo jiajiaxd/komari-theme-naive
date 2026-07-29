@@ -9,7 +9,7 @@ import { useAppStore } from '@/stores/app'
 import { formatBytesPerSecondWithConfig, formatBytesWithConfig, formatDateTime, formatUptimeWithFormat, getStatus } from '@/utils/helper'
 import { getOSImage, getOSName } from '@/utils/osImageHelper'
 import { getRegionCode, getRegionDisplayName } from '@/utils/regionHelper'
-import { formatPriceWithCycle, getDaysUntilExpired, getExpireStatus, getExpireStatusHexColor, parseTags } from '@/utils/tagHelper'
+import { formatPriceWithCycle, formatRemainingValue, getDaysUntilExpired, getExpireStatus, getExpireStatusHexColor, getRemainingValue, parseTags, TAG_COLOR_HEX_MAP } from '@/utils/tagHelper'
 
 const props = defineProps<{
   node: NodeData
@@ -41,58 +41,7 @@ const memStatus = computed(() => getStatus(memPercentage.value))
 const diskPercentage = computed(() => (props.node.disk ?? 0) / (props.node.disk_total || 1) * 100)
 const diskStatus = computed(() => getStatus(diskPercentage.value))
 
-// 流量进度条相关计算
-const showTrafficProgress = computed(() => props.node.traffic_limit > 0)
-
-// 根据流量类型计算已用流量和百分比
-const trafficUsedPercentage = computed(() => {
-  if (props.node.traffic_limit <= 0)
-    return 0
-
-  const { net_total_up = 0, net_total_down = 0, traffic_limit_type } = props.node
-  let used = 0
-
-  switch (traffic_limit_type) {
-    case 'up':
-      used = net_total_up
-      break
-    case 'down':
-      used = net_total_down
-      break
-    case 'min':
-      used = Math.min(net_total_up, net_total_down)
-      break
-    case 'max':
-      used = Math.max(net_total_up, net_total_down)
-      break
-    case 'sum':
-    default:
-      used = net_total_up + net_total_down
-      break
-  }
-
-  return Math.min((used / props.node.traffic_limit) * 100, 100)
-})
-
-// 已用流量（用于显示）
-const trafficUsed = computed(() => {
-  const { net_total_up = 0, net_total_down = 0, traffic_limit_type } = props.node
-  switch (traffic_limit_type) {
-    case 'up':
-      return net_total_up
-    case 'down':
-      return net_total_down
-    case 'min':
-      return Math.min(net_total_up, net_total_down)
-    case 'max':
-      return Math.max(net_total_up, net_total_down)
-    case 'sum':
-    default:
-      return net_total_up + net_total_down
-  }
-})
-
-// 计算节点的价格相关标签（剩余天数 + 价格）
+// 计算节点的价格相关标签（剩余天数 + 剩余价值 + 价格）
 const priceTags = computed(() => {
   const tags: Array<{ text: string, color: string }> = []
   const lang = appStore.lang
@@ -118,6 +67,17 @@ const priceTags = computed(() => {
     // 价格标签
     const priceText = formatPriceWithCycle(node.price, node.billing_cycle, node.currency, lang)
     tags.push({ text: priceText, color: themeVars.value.infoColor }) // purple
+
+    // 剩余价值标签
+    if (appStore.showRemainingValue) {
+      const remaining = getRemainingValue(node.price, node.billing_cycle, node.expired_at)
+      if (remaining !== null) {
+        tags.push({
+          text: formatRemainingValue(remaining, node.currency, lang),
+          color: TAG_COLOR_HEX_MAP.gold,
+        })
+      }
+    }
   }
 
   return tags
@@ -292,40 +252,19 @@ function handleCardKeydown(event: KeyboardEvent): void {
                 </NText>
               </div>
 
-              <!-- 流量进度条 -->
+              <!-- 流量：上传/下载占比对比 -->
               <div v-if="visibleMetrics.has('traffic')" class="flex flex-col gap-1.5">
                 <div class="flex-between">
                   <NText :depth="3" class="text-[13px]">
                     流量
                   </NText>
-                  <NText class="text-[13px]" :style="{ fontFamily: appStore.numberFontFamily }">
-                    <template v-if="showTrafficProgress">
-                      {{ trafficUsedPercentage.toFixed(1) }}%
-                    </template>
-                    <template v-else>
-                      ∞
-                    </template>
-                  </NText>
                 </div>
-                <!-- 统一使用 TrafficProgress 组件，自动根据类型选择颜色 -->
                 <TrafficProgress
                   :height="4"
                   :upload="props.node.net_total_up ?? 0"
                   :download="props.node.net_total_down ?? 0"
-                  :traffic-limit="props.node.traffic_limit"
-                  :traffic-limit-type="(props.node.traffic_limit_type || 'sum')"
                 />
-                <NTooltip v-if="showTrafficProgress">
-                  <template #trigger>
-                    <NText :depth="3" class="text-[10px] cursor-help" :style="{ fontFamily: appStore.numberFontFamily }">
-                      {{ formatBytes(trafficUsed) }} / {{ formatBytes(props.node.traffic_limit) }}
-                    </NText>
-                  </template>
-                  <NText class="text-[10px]" :style="{ fontFamily: appStore.numberFontFamily }">
-                    <span :style="{ color: appStore.trafficSplitColor ? themeVars.successColor : themeVars.textColorBase }">↑ {{ formatBytes(props.node.net_total_up ?? 0) }}</span><span class="p-1" /><span :style="{ color: appStore.trafficSplitColor ? themeVars.infoColor : themeVars.textColorBase }">↓ {{ formatBytes(props.node.net_total_down ?? 0) }}</span>
-                  </NText>
-                </NTooltip>
-                <NText v-else :depth="3" class="text-[10px]" :style="{ fontFamily: appStore.numberFontFamily }">
+                <NText :depth="3" class="text-[10px]" :style="{ fontFamily: appStore.numberFontFamily }">
                   <span :style="{ color: appStore.trafficSplitColor ? themeVars.successColor : themeVars.textColor3 }">↑ {{ formatBytes(props.node.net_total_up ?? 0) }}</span><span class="p-1" /><span :style="{ color: appStore.trafficSplitColor ? themeVars.infoColor : themeVars.textColor3 }">↓ {{ formatBytes(props.node.net_total_down ?? 0) }}</span>
                 </NText>
               </div>

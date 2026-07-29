@@ -344,6 +344,56 @@ export function formatPriceWithCycle(
 }
 
 /**
+ * 计算按剩余天数折算的剩余价值
+ * @param price 价格
+ * @param billingCycle 计费周期（天），-1 表示一次性
+ * @param expiredAt 过期时间
+ * @returns 剩余价值，无法计算时返回 null
+ */
+export function getRemainingValue(
+  price: number,
+  billingCycle: number,
+  expiredAt: string | number | undefined,
+): number | null {
+  if (price === 0 || price === -1)
+    return null
+
+  const status = getExpireStatus(expiredAt)
+  if (status === 'long_term')
+    return null
+
+  if (status === 'expired')
+    return 0
+
+  const days = getDaysUntilExpired(expiredAt)
+  if (days <= 0)
+    return 0
+
+  // 一次性计费：未过期按全价
+  if (billingCycle === -1 || billingCycle <= 0)
+    return price
+
+  const effectiveDays = Math.min(days, billingCycle)
+  return (price * effectiveDays) / billingCycle
+}
+
+/**
+ * 格式化剩余价值显示
+ * @param value 剩余价值
+ * @param currency 货币符号
+ * @param lang 语言
+ * @returns 显示文本
+ */
+export function formatRemainingValue(
+  value: number,
+  currency: string = '￥',
+  lang: 'zh-CN' | 'en-US' = 'zh-CN',
+): string {
+  const amount = `${currency}${value.toFixed(2)}`
+  return lang === 'zh-CN' ? `剩余价值 ${amount}` : `Residual ${amount}`
+}
+
+/**
  * 检查是否有 IPv4
  */
 export function hasIPv4(ipv4: string | undefined | null): boolean {

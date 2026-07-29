@@ -371,6 +371,15 @@ const useAppStore = defineStore('app', () => {
     return false
   })
 
+  // 计算属性：是否显示剩余价值
+  const showRemainingValue = computed<boolean>(() => {
+    const settings = publicSettings.value?.theme_settings
+    if (settings && typeof settings.showRemainingValue === 'boolean') {
+      return settings.showRemainingValue
+    }
+    return true
+  })
+
   // 计算属性：是否使用 Tag 组件包裹运行时间
   const uptimeTagWrap = computed<boolean>(() => {
     const settings = publicSettings.value?.theme_settings
@@ -672,6 +681,7 @@ const useAppStore = defineStore('app', () => {
     listTagsStyle,
     showPingChartButton,
     tagsInSeparateRow,
+    showRemainingValue,
     uptimeTagWrap,
     uptimeFormat,
     lightCardContrast,

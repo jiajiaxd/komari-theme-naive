@@ -9,7 +9,7 @@ import { useAppStore } from '@/stores/app'
 import { formatBytesPerSecondWithConfig, formatBytesWithConfig, formatDateTime, formatUptimeWithFormat, getStatus } from '@/utils/helper'
 import { getOSImage, getOSName } from '@/utils/osImageHelper'
 import { getRegionCode, getRegionDisplayName } from '@/utils/regionHelper'
-import { formatPriceWithCycle, getDaysUntilExpired, getExpireStatus, parseTags } from '@/utils/tagHelper'
+import { formatPriceWithCycle, formatRemainingValue, getDaysUntilExpired, getExpireStatus, getRemainingValue, parseTags, TAG_COLOR_HEX_MAP } from '@/utils/tagHelper'
 
 const props = defineProps<{
   nodes: NodeData[]
@@ -18,13 +18,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   click: [node: NodeData]
 }>()
-
-// 检测是否为触摸设备（移动端）
-const isTouchDevice = computed(() => {
-  if (typeof window === 'undefined')
-    return false
-  return 'ontouchstart' in window || navigator.maxTouchPoints > 0
-})
 
 const appStore = useAppStore()
 const { glassSurfaceStyle, isGlassEnabled } = useGlassSurface()
@@ -204,59 +197,6 @@ function openPingChart(node: NodeData) {
   showPingChart.value = true
 }
 
-// 计算节点是否显示流量进度条
-function showTrafficProgress(node: NodeData): boolean {
-  return node.traffic_limit > 0
-}
-
-// 计算流量使用百分比
-function getTrafficUsedPercentage(node: NodeData): number {
-  if (node.traffic_limit <= 0)
-    return 0
-
-  const { net_total_up = 0, net_total_down = 0, traffic_limit_type } = node
-  let used = 0
-
-  switch (traffic_limit_type) {
-    case 'up':
-      used = net_total_up
-      break
-    case 'down':
-      used = net_total_down
-      break
-    case 'min':
-      used = Math.min(net_total_up, net_total_down)
-      break
-    case 'max':
-      used = Math.max(net_total_up, net_total_down)
-      break
-    case 'sum':
-    default:
-      used = net_total_up + net_total_down
-      break
-  }
-
-  return Math.min((used / node.traffic_limit) * 100, 100)
-}
-
-// 计算已用流量
-function getTrafficUsed(node: NodeData): number {
-  const { net_total_up = 0, net_total_down = 0, traffic_limit_type } = node
-  switch (traffic_limit_type) {
-    case 'up':
-      return net_total_up
-    case 'down':
-      return net_total_down
-    case 'min':
-      return Math.min(net_total_up, net_total_down)
-    case 'max':
-      return Math.max(net_total_up, net_total_down)
-    case 'sum':
-    default:
-      return net_total_up + net_total_down
-  }
-}
-
 function formatOfflineTime(node: NodeData): string {
   return formatDateTime(node.time)
 }
@@ -282,7 +222,7 @@ function getNodeTags(node: NodeData): Array<{ text: string, color: string }> {
   const tags: Array<{ text: string, color: string }> = []
   const lang = appStore.lang
 
-  // 前两个标签：剩余天数和价格（price > 0 时显示）
+  // 价格相关标签：剩余天数、剩余价值、价格（price !== 0 时显示）
   if (node.price !== 0) {
     // 剩余天数标签
     const days = getDaysUntilExpired(node.expired_at)
@@ -302,6 +242,17 @@ function getNodeTags(node: NodeData): Array<{ text: string, color: string }> {
     // 价格标签
     const priceText = formatPriceWithCycle(node.price, node.billing_cycle, node.currency, lang)
     tags.push({ text: priceText, color: '#0090FF' }) // 蓝色
+
+    // 剩余价值标签
+    if (appStore.showRemainingValue) {
+      const remaining = getRemainingValue(node.price, node.billing_cycle, node.expired_at)
+      if (remaining !== null) {
+        tags.push({
+          text: formatRemainingValue(remaining, node.currency, lang),
+          color: TAG_COLOR_HEX_MAP.gold,
+        })
+      }
+    }
   }
 
   // 后续标签：从 tags 字段解析
@@ -508,40 +459,22 @@ const columnTitles: Record<string, string> = {
               </div>
             </div>
 
-            <!-- 流量 -->
+            <!-- 流量：上传/下载占比对比 -->
             <div v-else-if="col === 'traffic'" class="node-list-item__traffic" :style="getColumnStyle('traffic')">
-              <div class="traffic-cell">
-                <NTooltip :trigger="isTouchDevice ? 'click' : 'hover'">
-                  <template #trigger>
-                    <div class="flex flex-col gap-0.5 w-full" :class="{ 'cursor-help': !isTouchDevice }" @click.stop>
-                      <div class="text-[11px] flex gap-1 items-center" :style="{ fontFamily: appStore.numberFontFamily }">
-                        <NText v-if="showTrafficProgress(node)">
-                          {{ getTrafficUsedPercentage(node).toFixed(1) }}%
-                        </NText>
-                        <div class="flex-1" />
-                        <NText :depth="3">
-                          {{ formatBytes(getTrafficUsed(node)) }} / <template v-if="showTrafficProgress(node)">
-                            {{ formatBytes(node.traffic_limit) }}
-                          </template><template v-else>
-                            ∞
-                          </template>
-                        </NText>
-                      </div>
-                      <!-- 统一使用 TrafficProgress 组件，自动根据类型选择颜色 -->
-                      <TrafficProgress
-                        :upload="node.net_total_up ?? 0"
-                        :download="node.net_total_down ?? 0"
-                        :traffic-limit="node.traffic_limit"
-                        :traffic-limit-type="(node.traffic_limit_type || 'sum')"
-                        height="4px"
-                      />
-                    </div>
-                  </template>
-                  <div class="text-[11px] flex flex-col gap-1" :style="{ fontFamily: appStore.numberFontFamily }">
-                    <span><span :style="{ color: themeVars.successColor }">↑</span> {{ formatBytes(node.net_total_up ?? 0) }}</span>
-                    <span><span :style="{ color: themeVars.infoColor }">↓</span> {{ formatBytes(node.net_total_down ?? 0) }}</span>
-                  </div>
-                </NTooltip>
+              <div class="traffic-cell flex flex-col gap-0.5 w-full">
+                <div class="text-[11px] flex gap-1 items-center justify-between" :style="{ fontFamily: appStore.numberFontFamily }">
+                  <NText :depth="3" :style="{ color: appStore.trafficSplitColor ? themeVars.successColor : undefined }">
+                    ↑ {{ formatBytes(node.net_total_up ?? 0) }}
+                  </NText>
+                  <NText :depth="3" :style="{ color: appStore.trafficSplitColor ? themeVars.infoColor : undefined }">
+                    ↓ {{ formatBytes(node.net_total_down ?? 0) }}
+                  </NText>
+                </div>
+                <TrafficProgress
+                  :upload="node.net_total_up ?? 0"
+                  :download="node.net_total_down ?? 0"
+                  height="4px"
+                />
               </div>
             </div>
           </template>

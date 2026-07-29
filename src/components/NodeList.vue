@@ -6,10 +6,12 @@ import PingChart from '@/components/PingChart.vue'
 import TrafficProgress from '@/components/TrafficProgress.vue'
 import { useGlassSurface } from '@/composables/useGlassSurface'
 import { useAppStore } from '@/stores/app'
+import { exchangeRateVersion } from '@/utils/exchangeRate'
 import { formatBytesPerSecondWithConfig, formatBytesWithConfig, formatDateTime, formatUptimeWithFormat, getStatus } from '@/utils/helper'
 import { getOSImage, getOSName } from '@/utils/osImageHelper'
 import { getRegionCode, getRegionDisplayName } from '@/utils/regionHelper'
-import { formatPriceWithCycle, formatRemainingValue, getDaysUntilExpired, getExpireStatus, getRemainingValue, parseTags, TAG_COLOR_HEX_MAP } from '@/utils/tagHelper'
+import { copyRemainingValueReport, getRemainingValueView } from '@/utils/remainingValue'
+import { formatPriceWithCycle, getDaysUntilExpired, getExpireStatus, parseTags, TAG_COLOR_HEX_MAP } from '@/utils/tagHelper'
 
 const props = defineProps<{
   nodes: NodeData[]
@@ -217,12 +219,19 @@ function getExpireBadgeColor(status: string): string {
   }
 }
 
+interface NodeTag {
+  text: string
+  color: string
+  kind?: 'remaining'
+}
+
 // 计算节点的标签列表（返回颜色）
-function getNodeTags(node: NodeData): Array<{ text: string, color: string }> {
-  const tags: Array<{ text: string, color: string }> = []
+function getNodeTags(node: NodeData): NodeTag[] {
+  void exchangeRateVersion.value
+  const tags: NodeTag[] = []
   const lang = appStore.lang
 
-  // 价格相关标签：剩余天数、剩余价值、价格（price !== 0 时显示）
+  // 价格相关标签：剩余天数、价格、剩余价值（price !== 0 时显示）
   if (node.price !== 0) {
     // 剩余天数标签
     const days = getDaysUntilExpired(node.expired_at)
@@ -243,13 +252,14 @@ function getNodeTags(node: NodeData): Array<{ text: string, color: string }> {
     const priceText = formatPriceWithCycle(node.price, node.billing_cycle, node.currency, lang)
     tags.push({ text: priceText, color: '#0090FF' }) // 蓝色
 
-    // 剩余价值标签
+    // 剩余价值标签（人民币）
     if (appStore.showRemainingValue) {
-      const remaining = getRemainingValue(node.price, node.billing_cycle, node.expired_at)
-      if (remaining !== null) {
+      const remainingView = getRemainingValueView(node, lang)
+      if (remainingView) {
         tags.push({
-          text: formatRemainingValue(remaining, node.currency, lang),
+          text: remainingView.text,
           color: TAG_COLOR_HEX_MAP.gold,
+          kind: 'remaining',
         })
       }
     }
@@ -262,6 +272,16 @@ function getNodeTags(node: NodeData): Array<{ text: string, color: string }> {
   }
 
   return tags
+}
+
+async function handleRemainingValueClick(event: MouseEvent, node: NodeData): Promise<void> {
+  event.stopPropagation()
+  event.preventDefault()
+  const ok = await copyRemainingValueReport(node)
+  if (ok)
+    window.$message?.success('已复制剩余价值信息')
+  else
+    window.$message?.error('复制失败，请重试')
 }
 
 // 列标题映射
@@ -371,17 +391,26 @@ const columnTitles: Record<string, string> = {
                     :key="index"
                     :color="{ color: `${tag.color}20`, textColor: tag.color, borderColor: `${tag.color}40` }"
                     size="small"
+                    :class="{ 'cursor-pointer': tag.kind === 'remaining' }"
+                    :title="tag.kind === 'remaining' ? '点击复制剩余价值报告' : undefined"
+                    @click="tag.kind === 'remaining' ? handleRemainingValueClick($event, node) : undefined"
                   >
                     {{ tag.text }}
                   </NTag>
                 </template>
                 <template v-else>
-                  <NBadge
+                  <span
                     v-for="(tag, index) in getNodeTags(node)"
                     :key="index"
-                    :color="tag.color"
-                    :value="tag.text"
-                  />
+                    :class="{ 'cursor-pointer': tag.kind === 'remaining' }"
+                    :title="tag.kind === 'remaining' ? '点击复制剩余价值报告' : undefined"
+                    @click="tag.kind === 'remaining' ? handleRemainingValueClick($event, node) : undefined"
+                  >
+                    <NBadge
+                      :color="tag.color"
+                      :value="tag.text"
+                    />
+                  </span>
                 </template>
               </div>
             </div>

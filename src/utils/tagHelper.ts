@@ -378,19 +378,88 @@ export function getRemainingValue(
 }
 
 /**
- * 格式化剩余价值显示
- * @param value 剩余价值
- * @param currency 货币符号
+ * 格式化剩余价值显示（优先人民币）
+ * @param valueCny 人民币剩余价值
  * @param lang 语言
  * @returns 显示文本
  */
 export function formatRemainingValue(
-  value: number,
-  currency: string = '￥',
+  valueCny: number,
   lang: 'zh-CN' | 'en-US' = 'zh-CN',
 ): string {
-  const amount = `${currency}${value.toFixed(2)}`
+  const amount = `¥${valueCny.toFixed(2)}`
   return lang === 'zh-CN' ? `剩余价值 ${amount}` : `Residual ${amount}`
+}
+
+/**
+ * 计费周期的「付费」展示，如 年付 / 月付
+ */
+export function getBillingCyclePayText(billingCycle: number, lang: 'zh-CN' | 'en-US' = 'zh-CN'): string {
+  const type = parseBillingCycleType(billingCycle)
+  if (lang === 'en-US')
+    return getBillingCycleText(billingCycle, lang)
+
+  const payTexts: Partial<Record<BillingCycleType, string>> = {
+    monthly: '月付',
+    quarterly: '季付',
+    semi_annual: '半年付',
+    annual: '年付',
+    biennial: '两年付',
+    triennial: '三年付',
+    quinquennial: '五年付',
+    once: '一次性',
+  }
+  return payTexts[type] ?? getBillingCycleText(billingCycle, lang)
+}
+
+function formatReportDate(value: string | number | Date | undefined): string {
+  if (!value)
+    return '-'
+  const date = dayjs(value)
+  if (!date.isValid())
+    return '-'
+  return `${date.year()}/${date.month() + 1}/${date.date()}`
+}
+
+export interface RemainingValueReportInput {
+  price: number
+  billingCycle: number
+  currency: string
+  expiredAt: string | number | undefined
+  /** 原币种剩余价值 */
+  remainingOriginal: number
+  /** 人民币续费价格 */
+  priceCny: number
+  /** 人民币剩余价值 */
+  remainingCny: number
+  /** 1 原币 = ? CNY */
+  rate: number
+  tradeDate?: string | number | Date
+}
+
+/**
+ * 生成可复制的 VPS 剩余价值报告（Markdown）
+ */
+export function buildRemainingValueReport(input: RemainingValueReportInput): string {
+  const cycleText = getBillingCyclePayText(input.billingCycle, 'zh-CN')
+  const originalPriceText = formatPrice(input.price, input.currency, 'zh-CN')
+  const days = getDaysUntilExpired(input.expiredAt)
+  const remainingDaysText = days <= 0 ? '0 天' : `${days} 天`
+
+  return [
+    '## VPS 剩余价值计算',
+    '',
+    '**价格信息**',
+    `- 续费价格：${originalPriceText} (${cycleText})`,
+    `- 人民币价格：¥${input.priceCny.toFixed(2)}`,
+    `- 汇率：${input.rate.toFixed(3)}`,
+    '',
+    '**剩余价值**',
+    `- 交易日期：${formatReportDate(input.tradeDate ?? new Date())}`,
+    `- 到期日期：${formatReportDate(input.expiredAt)}`,
+    `- 剩余天数：${remainingDaysText}`,
+    `- **剩余价值：¥${input.remainingCny.toFixed(2)}**`,
+  ].join('\n')
 }
 
 /**

@@ -6,10 +6,12 @@ import PingChart from '@/components/PingChart.vue'
 import TrafficProgress from '@/components/TrafficProgress.vue'
 import { useGlassSurface } from '@/composables/useGlassSurface'
 import { useAppStore } from '@/stores/app'
+import { exchangeRateVersion } from '@/utils/exchangeRate'
 import { formatBytesPerSecondWithConfig, formatBytesWithConfig, formatDateTime, formatUptimeWithFormat, getStatus } from '@/utils/helper'
 import { getOSImage, getOSName } from '@/utils/osImageHelper'
 import { getRegionCode, getRegionDisplayName } from '@/utils/regionHelper'
-import { formatPriceWithCycle, formatRemainingValue, getDaysUntilExpired, getExpireStatus, getExpireStatusHexColor, getRemainingValue, parseTags, TAG_COLOR_HEX_MAP } from '@/utils/tagHelper'
+import { copyRemainingValueReport, getRemainingValueView } from '@/utils/remainingValue'
+import { formatPriceWithCycle, getDaysUntilExpired, getExpireStatus, getExpireStatusHexColor, parseTags, TAG_COLOR_HEX_MAP } from '@/utils/tagHelper'
 
 const props = defineProps<{
   node: NodeData
@@ -41,9 +43,16 @@ const memStatus = computed(() => getStatus(memPercentage.value))
 const diskPercentage = computed(() => (props.node.disk ?? 0) / (props.node.disk_total || 1) * 100)
 const diskStatus = computed(() => getStatus(diskPercentage.value))
 
-// 计算节点的价格相关标签（剩余天数 + 剩余价值 + 价格）
+interface PriceTag {
+  text: string
+  color: string
+  kind?: 'remaining'
+}
+
+// 计算节点的价格相关标签（剩余天数 + 价格 + 剩余价值）
 const priceTags = computed(() => {
-  const tags: Array<{ text: string, color: string }> = []
+  void exchangeRateVersion.value
+  const tags: PriceTag[] = []
   const lang = appStore.lang
   const node = props.node
 
@@ -68,13 +77,14 @@ const priceTags = computed(() => {
     const priceText = formatPriceWithCycle(node.price, node.billing_cycle, node.currency, lang)
     tags.push({ text: priceText, color: themeVars.value.infoColor }) // purple
 
-    // 剩余价值标签
+    // 剩余价值标签（人民币）
     if (appStore.showRemainingValue) {
-      const remaining = getRemainingValue(node.price, node.billing_cycle, node.expired_at)
-      if (remaining !== null) {
+      const remainingView = getRemainingValueView(node, lang)
+      if (remainingView) {
         tags.push({
-          text: formatRemainingValue(remaining, node.currency, lang),
+          text: remainingView.text,
           color: TAG_COLOR_HEX_MAP.gold,
+          kind: 'remaining',
         })
       }
     }
@@ -85,13 +95,23 @@ const priceTags = computed(() => {
 
 // 计算节点的自定义标签
 const customTags = computed(() => {
-  return parseTags(props.node.tags).map(tag => ({ text: tag.text, color: tag.hex }))
+  return parseTags(props.node.tags).map(tag => ({ text: tag.text, color: tag.hex } as PriceTag))
 })
 
 // 计算合并后的标签（自定义标签 + 价格标签）
 const mergedTags = computed(() => {
   return [...customTags.value, ...priceTags.value]
 })
+
+async function handleRemainingValueClick(event: MouseEvent): Promise<void> {
+  event.stopPropagation()
+  event.preventDefault()
+  const ok = await copyRemainingValueReport(props.node)
+  if (ok)
+    window.$message?.success('已复制剩余价值信息')
+  else
+    window.$message?.error('复制失败，请重试')
+}
 
 // 是否在单独一行显示标签
 const shouldShowTagsInSeparateRow = computed(() => {
@@ -292,7 +312,10 @@ function handleCardKeydown(event: KeyboardEvent): void {
                     v-for="(tag, index) in priceTags"
                     :key="index"
                     size="small"
+                    :class="{ 'cursor-pointer': tag.kind === 'remaining' }"
+                    :title="tag.kind === 'remaining' ? '点击复制剩余价值报告' : undefined"
                     :color="{ color: `${tag.color}20`, textColor: tag.color, borderColor: `${tag.color}40` }"
+                    @click="tag.kind === 'remaining' ? handleRemainingValueClick($event) : undefined"
                   >
                     {{ tag.text }}
                   </NTag>
@@ -317,7 +340,10 @@ function handleCardKeydown(event: KeyboardEvent): void {
                   v-for="(tag, index) in mergedTags"
                   :key="index"
                   size="small"
+                  :class="{ 'cursor-pointer': tag.kind === 'remaining' }"
+                  :title="tag.kind === 'remaining' ? '点击复制剩余价值报告' : undefined"
                   :color="{ color: `${tag.color}20`, textColor: tag.color, borderColor: `${tag.color}40` }"
+                  @click="tag.kind === 'remaining' ? handleRemainingValueClick($event) : undefined"
                 >
                   {{ tag.text }}
                 </NTag>

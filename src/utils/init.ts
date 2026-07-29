@@ -8,6 +8,7 @@ import { h } from 'vue'
 import LoginDialog from '@/components/LoginDialog.vue'
 import { useAppStore } from '@/stores/app'
 import { useNodesStore } from '@/stores/nodes'
+import { preloadExchangeRates } from '@/utils/exchangeRate'
 import { getSharedRpc, RpcError } from '@/utils/rpc'
 
 /** 初始化配置 */
@@ -70,6 +71,9 @@ class InitManager {
 
       // 2. 获取服务端公开属性
       await this.fetchPublicSettings()
+
+      // 2.1 预加载汇率（用于剩余价值人民币换算，不阻塞后续流程）
+      preloadExchangeRates()
 
       // 3. 获取用户信息
       await this.fetchUserInfo()

@@ -91,10 +91,10 @@ export function buildPingBuckets(
 
   const bucketMs = TOTAL_WINDOW_MS / boundedCount
   const windowStart = nowMs - TOTAL_WINDOW_MS
-  const totals: number[] = Array.from({ length: boundedCount }).fill(0)
-  const losts: number[] = Array.from({ length: boundedCount }).fill(0)
-  const positiveSums: number[] = Array.from({ length: boundedCount }).fill(0)
-  const positiveCounts: number[] = Array.from({ length: boundedCount }).fill(0)
+  const totals: number[] = Array.from<number>({ length: boundedCount }).fill(0)
+  const losts: number[] = Array.from<number>({ length: boundedCount }).fill(0)
+  const positiveSums: number[] = Array.from<number>({ length: boundedCount }).fill(0)
+  const positiveCounts: number[] = Array.from<number>({ length: boundedCount }).fill(0)
 
   for (const sample of ping.samples ?? []) {
     if (sample.time < windowStart || sample.time > nowMs)

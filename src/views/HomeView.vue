@@ -7,6 +7,7 @@ import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import { useGlassSurface } from '@/composables/useGlassSurface'
 import { useAppStore } from '@/stores/app'
 import { useNodesStore } from '@/stores/nodes'
+import { usePingOverviewStore } from '@/stores/pingOverview'
 import { isRegionMatch } from '@/utils/regionHelper'
 
 // 定义组件名称，用于 KeepAlive 匹配
@@ -22,8 +23,11 @@ const NodeList = defineAsyncComponent(() => import('@/components/NodeList.vue'))
 const appStore = useAppStore()
 const { glassSurfaceStyle, isGlassEnabled } = useGlassSurface()
 const nodesStore = useNodesStore()
+const pingStore = usePingOverviewStore()
 
 const router = useRouter()
+
+let releasePingOverview: (() => void) | null = null
 
 // 组件激活时恢复滚动位置
 onActivated(() => {
@@ -32,6 +36,9 @@ onActivated(() => {
     nextTick(() => {
       window.scrollTo({ top: appStore.homeScrollPosition, behavior: 'instant' })
     })
+  }
+  if (!releasePingOverview) {
+    releasePingOverview = pingStore.retain()
   }
 })
 

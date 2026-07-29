@@ -6,6 +6,7 @@ import PingChart from '@/components/PingChart.vue'
 import TrafficProgress from '@/components/TrafficProgress.vue'
 import { useGlassSurface } from '@/composables/useGlassSurface'
 import { useAppStore } from '@/stores/app'
+import { usePingOverviewStore } from '@/stores/pingOverview'
 import { exchangeRateVersion } from '@/utils/exchangeRate'
 import { formatBytesPerSecondWithConfig, formatBytesWithConfig, formatDateTime, formatUptimeWithFormat, getStatus } from '@/utils/helper'
 import { getOSImage, getOSName } from '@/utils/osImageHelper'
@@ -22,6 +23,7 @@ const emit = defineEmits<{
 }>()
 
 const appStore = useAppStore()
+const pingStore = usePingOverviewStore()
 const { glassSurfaceStyle, isGlassEnabled } = useGlassSurface()
 
 // 获取 Naive UI 主题变量
@@ -89,6 +91,20 @@ const sortedNodes = computed(() => {
           ((a.net_out ?? 0) + (a.net_in ?? 0))
           - ((b.net_out ?? 0) + (b.net_in ?? 0))
         )
+      case 'latency': {
+        const pingA = pingStore.getItem(a.uuid)
+        const pingB = pingStore.getItem(b.uuid)
+        const va = pingA.lastValue ?? Number.POSITIVE_INFINITY
+        const vb = pingB.lastValue ?? Number.POSITIVE_INFINITY
+        return dir * (va - vb)
+      }
+      case 'loss': {
+        const pingA = pingStore.getItem(a.uuid)
+        const pingB = pingStore.getItem(b.uuid)
+        const va = pingA.loss ?? Number.POSITIVE_INFINITY
+        const vb = pingB.loss ?? Number.POSITIVE_INFINITY
+        return dir * (va - vb)
+      }
       default:
         return 0
     }
@@ -297,6 +313,8 @@ const columnTitles: Record<string, string> = {
   disk: '硬盘',
   traffic: '流量',
   rate: '速率',
+  latency: '延迟',
+  loss: '丢包',
 }
 </script>
 

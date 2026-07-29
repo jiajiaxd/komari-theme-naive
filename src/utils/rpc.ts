@@ -466,6 +466,18 @@ export class KomariRpc {
   }
 
   /**
+   * 获取 Ping 概览记录（主页延迟/丢包）
+   */
+  async getPingOverview(taskId: number, hours = 1): Promise<PingRecordsResult> {
+    return this.client.call<PingRecordsResult>('common:getRecords', {
+      type: 'ping',
+      hours,
+      task_id: taskId,
+      maxCount: 2000,
+    })
+  }
+
+  /**
    * 关闭连接
    */
   close(): void {

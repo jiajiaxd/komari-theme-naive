@@ -163,6 +163,8 @@ export interface PingRecord {
   task_id: number
   time: string
   value: number
+  count?: number
+  loss?: number
 }
 
 export interface PingTaskSummary {
@@ -186,3 +188,31 @@ export interface PingRecordsResult {
   from?: string
   to?: string
 }
+
+export interface PingOverviewSample {
+  time: number
+  value: number
+  count?: number
+  loss?: number
+}
+
+export interface PingOverviewItem {
+  client: string
+  isAssigned: boolean
+  lastValue: number | null
+  samples: PingOverviewSample[]
+  max: number
+  loss: number | null
+}
+
+export interface PingOverviewBucket {
+  index: number
+  value: number | null
+  loss: number | null
+  total: number
+  lost: number
+  startAt: number
+  endAt: number
+}
+
+export type HomepagePingTaskBindings = Record<string, string[]>

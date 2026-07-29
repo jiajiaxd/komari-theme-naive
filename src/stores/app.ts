@@ -1,8 +1,9 @@
-import type { MeInfo, PublicInfo } from '@/types/komari'
+import type { HomepagePingTaskBindings, MeInfo, PublicInfo } from '@/types/komari'
 import type { ByteDecimalsConfig, UptimeFormat } from '@/utils/helper'
 import { usePreferredDark, useStorageAsync } from '@vueuse/core'
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
+import { normalizeHomepagePingTaskBindings } from '@/utils/pingTasks'
 
 type ThemeMode = 'auto' | 'light' | 'dark'
 type Lang = 'zh-CN' | 'en-US'
@@ -362,6 +363,24 @@ const useAppStore = defineStore('app', () => {
     return true
   })
 
+  // 计算属性：是否在主界面显示延迟/丢包
+  const showHomepagePing = computed<boolean>(() => {
+    const settings = publicSettings.value?.theme_settings
+    if (settings && typeof settings.showHomepagePing === 'boolean') {
+      return settings.showHomepagePing
+    }
+    return true
+  })
+
+  // 计算属性：首页 Ping 任务绑定
+  const homepagePingBindings = computed<HomepagePingTaskBindings>(() => {
+    const settings = publicSettings.value?.theme_settings
+    if (settings && settings.homepagePingBindings) {
+      return normalizeHomepagePingTaskBindings(settings.homepagePingBindings)
+    }
+    return {}
+  })
+
   // 计算属性：是否将标签设置为单独一行显示
   const tagsInSeparateRow = computed<boolean>(() => {
     const settings = publicSettings.value?.theme_settings
@@ -680,6 +699,8 @@ const useAppStore = defineStore('app', () => {
     listStatusStyle,
     listTagsStyle,
     showPingChartButton,
+    showHomepagePing,
+    homepagePingBindings,
     tagsInSeparateRow,
     showRemainingValue,
     uptimeTagWrap,

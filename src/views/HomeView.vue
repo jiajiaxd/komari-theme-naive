@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { useDebounceFn } from '@vueuse/core'
-import { NAlert, NEmpty, NInput, NRadioButton, NRadioGroup, NTab, NTabs } from 'naive-ui'
+import { NAlert, NButton, NEmpty, NInput, NRadioButton, NRadioGroup, NTab, NTabs, NTooltip } from 'naive-ui'
 import { computed, defineAsyncComponent, nextTick, onActivated, onDeactivated, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import { useGlassSurface } from '@/composables/useGlassSurface'
 import { useAppStore } from '@/stores/app'
@@ -19,13 +19,16 @@ defineOptions({
 const NodeCard = defineAsyncComponent(() => import('@/components/NodeCard.vue'))
 const NodeGeneralCards = defineAsyncComponent(() => import('@/components/NodeGeneralCards.vue'))
 const NodeList = defineAsyncComponent(() => import('@/components/NodeList.vue'))
+const ThemeManageView = defineAsyncComponent(() => import('@/views/ThemeManageView.vue'))
 
 const appStore = useAppStore()
 const { glassSurfaceStyle, isGlassEnabled } = useGlassSurface()
 const nodesStore = useNodesStore()
 const pingStore = usePingOverviewStore()
 
+const route = useRoute()
 const router = useRouter()
+const showThemeManage = computed(() => route.query.themeManage === '1')
 
 let releasePingOverview: (() => void) | null = null
 
@@ -159,7 +162,8 @@ const cardGridStyle = computed(() => ({
 </script>
 
 <template>
-  <div class="home-view">
+  <ThemeManageView v-if="showThemeManage" />
+  <div v-else class="home-view">
     <div v-if="appStore.connectionError" class="alert px-4">
       <NAlert type="error" title="RPC 服务错误" show-icon>
         连接服务器失败，请检查网络设置<span class="whitespace-nowrap">或刷新页面后再试。</span>
@@ -185,6 +189,19 @@ const cardGridStyle = computed(() => ({
           <NTab v-for="group in groupTabs" :key="group.name" :name="group.name" :tab="group.tab" />
         </NTabs>
         <div class="toolbar-actions">
+          <NTooltip v-if="appStore.isLoggedIn" placement="bottom">
+            <template #trigger>
+              <NButton
+                quaternary
+                circle
+                aria-label="配置首页 Ping 任务绑定"
+                @click="router.push({ name: 'home', query: { ...route.query, themeManage: '1' } })"
+              >
+                <div class="i-icon-park-outline-radar" />
+              </NButton>
+            </template>
+            配置首页 Ping 任务绑定
+          </NTooltip>
           <NInput
             v-model:value="searchText"
             class="search-input"

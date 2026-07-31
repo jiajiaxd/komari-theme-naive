@@ -63,7 +63,21 @@
         "name": "首页 Ping 任务绑定",
         "type": "string",
         "default": "{}",
-        "help": "JSON 格式，taskId 到节点 uuid 数组的映射，例如 {\"1\":[\"uuid-a\",\"uuid-b\"]}，用于指定每个节点使用哪个 Ping 任务的数据"
+        "help": "JSON 格式，taskId 到节点 uuid 数组的映射，例如 {\"1\":[\"uuid-a\",\"uuid-b\"]}，用于指定每个节点使用哪个 Ping 任务的数据。已支持在首页可视化编辑（登录后点击首页右上角雷达图标）"
+      },
+      {
+        "key": "enableHomepageMultiPing",
+        "name": "启用三网模式",
+        "type": "switch",
+        "default": false,
+        "help": "启用后大卡片和小卡片统一展示下面的三项全局 Ping 任务，单线路绑定继续用于未启用三网的视图"
+      },
+      {
+        "key": "homepageMultiPingTaskIds",
+        "name": "三网模式任务 ID",
+        "type": "string",
+        "default": "[]",
+        "help": "JSON 数组格式，最多 3 个唯一正整数，例如 [1,2,3]；推荐使用首页可视化编辑生成"
       },
       {
         "key": "hideSingleGroupTab",

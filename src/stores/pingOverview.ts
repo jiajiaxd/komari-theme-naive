@@ -1,10 +1,10 @@
-import type { PingOverviewItem, PingRecordsResult } from '@/types/komari'
+import type { PingOverviewItem, PingOverviewLine, PingRecordsResult } from '@/types/komari'
 import { defineStore } from 'pinia'
 import { shallowRef } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useNodesStore } from '@/stores/nodes'
 import { buildPingBuckets, buildPingOverviewItems } from '@/utils/pingOverview'
-import { collectAllTaskIds } from '@/utils/pingTasks'
+import { resolveHomepagePingSelections } from '@/utils/pingTasks'
 import { getSharedRpc } from '@/utils/rpc'
 
 const DEFAULT_PING_REFRESH_INTERVAL_MS = 60_000
@@ -20,8 +20,11 @@ const EMPTY_PING: PingOverviewItem = {
   loss: null,
 }
 
+const EMPTY_LINES: PingOverviewLine[] = []
+
 const usePingOverviewStore = defineStore('pingOverview', () => {
   const pingMap = shallowRef<Map<string, PingOverviewItem>>(new Map())
+  const pingLinesMap = shallowRef<Map<string, PingOverviewLine[]>>(new Map())
 
   let refreshTimer: ReturnType<typeof setTimeout> | null = null
   let abortController: AbortController | null = null
@@ -34,6 +37,14 @@ const usePingOverviewStore = defineStore('pingOverview', () => {
 
   function getBuckets(uuid: string) {
     return buildPingBuckets(getItem(uuid))
+  }
+
+  function getLines(uuid: string): PingOverviewLine[] {
+    return pingLinesMap.value.get(uuid) ?? EMPTY_LINES
+  }
+
+  function getLineBuckets(line: PingOverviewLine) {
+    return buildPingBuckets(line.item)
   }
 
   async function fetchForTask(taskId: number): Promise<PingRecordsResult | null> {
@@ -83,15 +94,23 @@ const usePingOverviewStore = defineStore('pingOverview', () => {
 
     if (!appStore.showHomepagePing) {
       pingMap.value = new Map()
+      pingLinesMap.value = new Map()
       scheduleRefresh(DEFAULT_PING_REFRESH_INTERVAL_MS)
       return
     }
 
+    const useMulti = appStore.useHomepageMultiPing
     const bindings = appStore.homepagePingBindings
+    const multiTaskIds = appStore.homepageMultiPingTaskIds
     const visibleUuids = nodesStore.nodes.filter(n => !n.hidden).map(n => n.uuid)
 
-    if (visibleUuids.length === 0 || Object.keys(bindings).length === 0) {
+    const hasBindings = useMulti
+      ? multiTaskIds.length > 0
+      : Object.keys(bindings).length > 0
+
+    if (visibleUuids.length === 0 || !hasBindings) {
       pingMap.value = new Map()
+      pingLinesMap.value = new Map()
       scheduleRefresh(DEFAULT_PING_REFRESH_INTERVAL_MS)
       return
     }
@@ -102,7 +121,13 @@ const usePingOverviewStore = defineStore('pingOverview', () => {
     const { signal } = controller
 
     try {
-      const taskIds = collectAllTaskIds(bindings)
+      const selections = resolveHomepagePingSelections(visibleUuids, bindings, multiTaskIds)
+      const requestedTaskIdsByClient = selections.requestedTaskIdsByClient
+      // 收集去重后的全部 taskId
+      const taskIds = Array.from(
+        new Set(Array.from(requestedTaskIdsByClient.values()).flat()),
+      )
+
       const results = await Promise.allSettled(
         taskIds.map(taskId => fetchForTask(taskId)),
       )
@@ -110,25 +135,62 @@ const usePingOverviewStore = defineStore('pingOverview', () => {
       if (signal.aborted)
         return
 
-      const nextMap = new Map<string, PingOverviewItem>()
-
-      for (let i = 0; i < taskIds.length; i++) {
-        const result = results[i]
+      // taskId -> 任务名（尝试从任一响应里的 tasks 字段解析）
+      const taskNameByTaskId = new Map<number, string>()
+      for (const result of results) {
         if (result?.status !== 'fulfilled' || !result.value)
           continue
-
-        const taskId = taskIds[i]
-        if (taskId == null)
-          continue
-        const items = buildPingOverviewItems(taskId, result.value.records ?? [])
-        for (const [uuid, item] of items) {
-          if (!nextMap.has(uuid) || !nextMap.get(uuid)?.isAssigned) {
-            nextMap.set(uuid, item)
-          }
+        for (const task of result.value.tasks ?? []) {
+          if (!taskNameByTaskId.has(task.id))
+            taskNameByTaskId.set(task.id, task.name || `任务 #${task.id}`)
         }
       }
 
-      pingMap.value = nextMap
+      // taskId -> (uuid -> item)
+      const itemsByTask = new Map<number, Map<string, PingOverviewItem>>()
+      for (let i = 0; i < taskIds.length; i++) {
+        const taskId = taskIds[i]
+        if (taskId == null)
+          continue
+        const result = results[i]
+        if (result?.status !== 'fulfilled' || !result.value)
+          continue
+        itemsByTask.set(taskId, buildPingOverviewItems(taskId, result.value.records ?? []))
+      }
+
+      // single 路径：每个 uuid 取其唯一任务，未成功则空占位
+      const nextSingleMap = new Map<string, PingOverviewItem>()
+      for (const [uuid, taskIds] of selections.singleTaskIdsByClient) {
+        const taskId = taskIds[0]
+        if (taskId == null)
+          continue
+        const itemsForTask = itemsByTask.get(taskId)
+        const item = itemsForTask?.get(uuid)
+        if (item) {
+          nextSingleMap.set(uuid, item)
+        }
+        else {
+          nextSingleMap.set(uuid, { ...EMPTY_PING, client: uuid, isAssigned: true })
+        }
+      }
+
+      // multi 路径：每个 uuid 组装多条 line，单条失败则空占位
+      const nextMultiMap = new Map<string, PingOverviewLine[]>()
+      for (const [uuid, taskIds] of selections.multiTaskIdsByClient) {
+        const lines: PingOverviewLine[] = taskIds.map((taskId) => {
+          const taskName = taskNameByTaskId.get(taskId) ?? `任务 #${taskId}`
+          const item = itemsByTask.get(taskId)?.get(uuid)
+          return {
+            taskId,
+            taskName,
+            item: item ?? { ...EMPTY_PING, client: uuid, isAssigned: true },
+          }
+        })
+        nextMultiMap.set(uuid, lines)
+      }
+
+      pingMap.value = nextSingleMap
+      pingLinesMap.value = nextMultiMap
       scheduleRefresh(DEFAULT_PING_REFRESH_INTERVAL_MS)
     }
     catch {
@@ -161,8 +223,11 @@ const usePingOverviewStore = defineStore('pingOverview', () => {
 
   return {
     pingMap,
+    pingLinesMap,
     getItem,
     getBuckets,
+    getLines,
+    getLineBuckets,
     doRefresh,
     retain,
     stopPingPolling,

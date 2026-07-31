@@ -205,6 +205,13 @@ export interface PingOverviewItem {
   loss: number | null
 }
 
+// 三网/多任务模式下，单个节点对应的多条延迟线
+export interface PingOverviewLine {
+  taskId: number
+  taskName: string
+  item: PingOverviewItem
+}
+
 export interface PingOverviewBucket {
   index: number
   value: number | null

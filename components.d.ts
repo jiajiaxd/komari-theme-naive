@@ -21,6 +21,7 @@ declare module 'vue' {
     NodeCard: typeof import('./src/components/NodeCard.vue')['default']
     NodeGeneralCards: typeof import('./src/components/NodeGeneralCards.vue')['default']
     NodeList: typeof import('./src/components/NodeList.vue')['default']
+    NodeMultiPingHealth: typeof import('./src/components/NodeMultiPingHealth.vue')['default']
     NodePingHealth: typeof import('./src/components/NodePingHealth.vue')['default']
     PingChart: typeof import('./src/components/PingChart.vue')['default']
     Provider: typeof import('./src/components/Provider.vue')['default']

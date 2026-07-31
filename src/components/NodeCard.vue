@@ -2,6 +2,7 @@
 import type { NodeData } from '@/stores/nodes'
 import { NButton, NCard, NEllipsis, NIcon, NModal, NProgress, NTag, NText, NTooltip, useThemeVars } from 'naive-ui'
 import { computed, ref } from 'vue'
+import NodeMultiPingHealth from '@/components/NodeMultiPingHealth.vue'
 import NodePingHealth from '@/components/NodePingHealth.vue'
 import PingChart from '@/components/PingChart.vue'
 import TrafficProgress from '@/components/TrafficProgress.vue'
@@ -302,7 +303,10 @@ function handleCardKeydown(event: KeyboardEvent): void {
             </div>
 
             <!-- 延迟/丢包 -->
-            <NodePingHealth v-if="appStore.showHomepagePing" :uuid="props.node.uuid" />
+            <template v-if="appStore.showHomepagePing">
+              <NodeMultiPingHealth v-if="appStore.useHomepageMultiPing" :uuid="props.node.uuid" />
+              <NodePingHealth v-else :uuid="props.node.uuid" />
+            </template>
 
             <!-- 运行时间 -->
             <div class="uptime-row flex-between">

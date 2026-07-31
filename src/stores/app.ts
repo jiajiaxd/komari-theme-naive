@@ -3,7 +3,7 @@ import type { ByteDecimalsConfig, UptimeFormat } from '@/utils/helper'
 import { usePreferredDark, useStorageAsync } from '@vueuse/core'
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import { normalizeHomepagePingTaskBindings } from '@/utils/pingTasks'
+import { normalizeHomepageMultiPingTaskIds, normalizeHomepagePingTaskBindings } from '@/utils/pingTasks'
 
 type ThemeMode = 'auto' | 'light' | 'dark'
 type Lang = 'zh-CN' | 'en-US'
@@ -381,6 +381,30 @@ const useAppStore = defineStore('app', () => {
     return {}
   })
 
+  // 计算属性：是否启用三网模式（大卡片/小卡片统一显示三项全局任务）
+  const enableHomepageMultiPing = computed<boolean>(() => {
+    const settings = publicSettings.value?.theme_settings
+    if (settings && typeof settings.enableHomepageMultiPing === 'boolean') {
+      return settings.enableHomepageMultiPing
+    }
+    return false
+  })
+
+  // 计算属性：三网模式下的全局任务 ID 列表（规范化为最多 3 个唯一正整数）
+  const homepageMultiPingTaskIds = computed<number[]>(() => {
+    const settings = publicSettings.value?.theme_settings
+    if (settings && settings.homepageMultiPingTaskIds != null) {
+      return normalizeHomepageMultiPingTaskIds(settings.homepageMultiPingTaskIds)
+    }
+    return []
+  })
+
+  // 是否处于三网渲染模式（开关开 + 选满 3 个任务）
+  const useHomepageMultiPing = computed(() => {
+    return enableHomepageMultiPing.value
+      && homepageMultiPingTaskIds.value.length === 3
+  })
+
   // 计算属性：是否将标签设置为单独一行显示
   const tagsInSeparateRow = computed<boolean>(() => {
     const settings = publicSettings.value?.theme_settings
@@ -701,6 +725,9 @@ const useAppStore = defineStore('app', () => {
     showPingChartButton,
     showHomepagePing,
     homepagePingBindings,
+    enableHomepageMultiPing,
+    homepageMultiPingTaskIds,
+    useHomepageMultiPing,
     tagsInSeparateRow,
     showRemainingValue,
     uptimeTagWrap,

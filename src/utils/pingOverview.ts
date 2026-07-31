@@ -148,13 +148,9 @@ export function buildPingBuckets(
 export function latencyHeatColor(value: number | null): string {
   if (value == null || value < 0)
     return 'var(--n-text-color-3)'
-  if (value <= 30)
+  if (value < 100)
     return '#22c55e'
-  if (value <= 80)
-    return '#eab308'
-  if (value <= 200)
-    return '#f97316'
-  return '#ef4444'
+  return value < 300 ? '#eab308' : '#ef4444'
 }
 
 export function lossHeatColor(value: number | null): string {

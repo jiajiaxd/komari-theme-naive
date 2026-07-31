@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { NText, NTooltip } from 'naive-ui'
-import { computed, ref } from 'vue'
+import type { PingOverviewLine } from '@/types/komari'
+import { NText } from 'naive-ui'
+import { computed } from 'vue'
+import PingHistoryStrip from '@/components/PingHistoryStrip.vue'
 import { useAppStore } from '@/stores/app'
 import { usePingOverviewStore } from '@/stores/pingOverview'
 import { latencyHeatColor, lossHeatColor } from '@/utils/pingOverview'
@@ -14,19 +16,10 @@ const appStore = useAppStore()
 const pingStore = usePingOverviewStore()
 
 const lines = computed(() => pingStore.getLines(props.uuid))
-
-const safeMax = computed(() => {
-  let max = 1
-  for (const line of lines.value) {
-    if (line.item.max > max)
-      max = line.item.max
-  }
-  return max
-})
-
-const barHeight = computed(() => (props.compact ? 6 : 8))
-
-type BucketKind = 'latency' | 'loss'
+const lineViews = computed(() => lines.value.map(line => ({
+  line,
+  buckets: pingStore.getLineBuckets(line),
+})))
 
 function latencyLabel(value: number | null): string {
   if (value == null)
@@ -40,113 +33,48 @@ function lossLabel(value: number | null): string {
   return `${value.toFixed(1)}%`
 }
 
-const hoveredLineIndex = ref<number | null>(null)
-const hoveredMetric = ref<BucketKind | null>(null)
-const hoveredBucketIndex = ref<number | null>(null)
-
-function barStyle(line: typeof lines.value[number], bucketIndex: number, kind: BucketKind): Record<string, string> {
-  const buckets = pingStore.getLineBuckets(line)
-  const bucket = buckets[bucketIndex]
-  const height = barHeight.value
-  const barCount = buckets.length || 1
-  if (!bucket)
-    return { height: `${height}px`, width: `${Math.max(1, 100 / barCount - 1)}%`, opacity: '0' }
-  if (kind === 'latency') {
-    const value = bucket.value
-    const active = value != null && Number.isFinite(value) && value >= 0
-    const pct = active ? Math.max(20, Math.min(100, (value! / safeMax.value) * 100)) : 24
-    return {
-      height: `${height}px`,
-      width: `${Math.max(1, 100 / barCount - 1)}%`,
-      transform: `scaleY(${active ? pct / 100 : 0.25})`,
-      backgroundColor: active ? latencyHeatColor(value) : 'var(--n-border-color)',
-      opacity: active ? '0.92' : '0.42',
-    }
-  }
-  else {
-    const loss = bucket.loss
-    const active = loss != null && Number.isFinite(loss) && bucket.total > 0
-    return {
-      height: `${height}px`,
-      width: `${Math.max(1, 100 / barCount - 1)}%`,
-      opacity: active ? '0.94' : '0.42',
-      backgroundColor: active ? lossHeatColor(loss) : 'var(--n-border-color)',
-    }
-  }
-}
-
-function formatBucketTooltip(line: typeof lines.value[number], bucketIndex: number, kind: BucketKind): string {
-  const buckets = pingStore.getLineBuckets(line)
-  const bucket = buckets[bucketIndex]
-  if (!bucket)
-    return ''
-  const start = new Date(bucket.startAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-  const taskName = line.taskName
-  if (kind === 'latency') {
-    if (bucket.value == null)
-      return `${taskName} · ${start} 无样本`
-    return `${taskName} · ${start} 延迟 ${Math.round(bucket.value)}ms`
-  }
-  if (bucket.loss == null || bucket.total === 0)
-    return `${taskName} · ${start} 无样本`
-  return `${taskName} · ${start} 丢包 ${bucket.loss.toFixed(1)}% (${bucket.total}发)`
+function getLineName(line: PingOverviewLine): string {
+  return line.taskName || `任务 #${line.taskId}`
 }
 </script>
 
 <template>
   <div class="multi-ping-health" :class="{ 'multi-ping-health--compact': compact }">
-    <div v-for="(line, lineIdx) in lines" :key="line.taskId" class="multi-ping-row">
-      <div class="multi-ping-row-head">
-        <span class="multi-ping-row-name" :title="line.taskName">{{ line.taskName }}</span>
-        <div class="multi-ping-row-values">
-          <NText
-            class="multi-ping-row-value"
-            :style="{ color: latencyHeatColor(line.item.lastValue), fontFamily: appStore.numberFontFamily }"
-            :depth="3"
-          >
-            {{ latencyLabel(line.item.lastValue) }}
-          </NText>
-          <NText
-            class="multi-ping-row-value"
-            :style="{ color: lossHeatColor(line.item.loss), fontFamily: appStore.numberFontFamily }"
-            :depth="3"
-          >
-            {{ lossLabel(line.item.loss) }}
-          </NText>
-        </div>
+    <div class="multi-ping-heading">
+      <span class="multi-ping-title">网络质量</span>
+      <span class="multi-ping-window">最近 1 小时</span>
+    </div>
+    <div v-if="lineViews.length > 0" class="multi-ping-rows">
+      <div v-for="lineView in lineViews" :key="lineView.line.taskId" class="multi-ping-row">
+        <span class="multi-ping-row-name" :title="getLineName(lineView.line)">
+          {{ getLineName(lineView.line) }}
+        </span>
+        <PingHistoryStrip
+          label="延迟"
+          :value="latencyLabel(lineView.line.item.lastValue)"
+          :value-color="latencyHeatColor(lineView.line.item.lastValue)"
+          :font-family="appStore.numberFontFamily"
+          :buckets="lineView.buckets"
+          metric="latency"
+          :tooltip-prefix="getLineName(lineView.line)"
+          :compact="compact"
+        />
+        <PingHistoryStrip
+          label="丢包"
+          :value="lossLabel(lineView.line.item.loss)"
+          :value-color="lossHeatColor(lineView.line.item.loss)"
+          :font-family="appStore.numberFontFamily"
+          :buckets="lineView.buckets"
+          metric="loss"
+          :tooltip-prefix="getLineName(lineView.line)"
+          :compact="compact"
+        />
       </div>
-      <div class="multi-ping-row-bars">
-        <NTooltip
-          v-for="(_bucket, bucketIdx) in pingStore.getLineBuckets(line)"
-          :key="bucketIdx"
-          placement="top"
-          :disabled="hoveredLineIndex !== lineIdx || hoveredBucketIndex !== bucketIdx"
-        >
-          <template #trigger>
-            <div class="multi-ping-bars-stack">
-              <div
-                :style="{
-                  ...barStyle(line, bucketIdx, 'latency'),
-                  borderBottomLeftRadius: bucketIdx === 0 ? '2px' : '0',
-                  borderBottomRightRadius: bucketIdx === pingStore.getLineBuckets(line).length - 1 ? '2px' : '0',
-                }"
-                @mouseenter="hoveredLineIndex = lineIdx; hoveredBucketIndex = bucketIdx; hoveredMetric = 'latency'"
-                @mouseleave="hoveredLineIndex = null; hoveredBucketIndex = null; hoveredMetric = null"
-              />
-              <div
-                :style="{
-                  ...barStyle(line, bucketIdx, 'loss'),
-                  borderBottomLeftRadius: bucketIdx === 0 ? '2px' : '0',
-                  borderBottomRightRadius: bucketIdx === pingStore.getLineBuckets(line).length - 1 ? '2px' : '0',
-                }"
-                @mouseenter="hoveredLineIndex = lineIdx; hoveredBucketIndex = bucketIdx; hoveredMetric = 'loss'"
-                @mouseleave="hoveredLineIndex = null; hoveredBucketIndex = null; hoveredMetric = null"
-              />
-            </div>
-          </template>
-          {{ hoveredMetric && formatBucketTooltip(line, bucketIdx, hoveredMetric) }}
-        </NTooltip>
-      </div>
+    </div>
+    <div v-else class="multi-ping-placeholder">
+      <NText :depth="3" class="text-xs">
+        未配置首页 Ping
+      </NText>
     </div>
   </div>
 </template>
@@ -155,57 +83,75 @@ function formatBucketTooltip(line: typeof lines.value[number], bucketIndex: numb
 .multi-ping-health {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   padding: 4px 0;
 }
 
 .multi-ping-health--compact {
-  gap: 2px;
+  gap: 6px;
 }
 
-.multi-ping-row {
+.multi-ping-heading {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.multi-ping-title {
+  color: var(--n-text-color-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.multi-ping-window {
+  color: var(--n-text-color-3);
+  font-size: 10px;
+}
+
+.multi-ping-rows {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-}
-
-.multi-ping-row-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.multi-ping-row-name {
-  font-size: 11px;
-  color: var(--n-text-color-3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 55%;
-}
-
-.multi-ping-row-values {
-  display: flex;
   gap: 8px;
 }
 
-.multi-ping-row-value {
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.2;
+.multi-ping-health--compact .multi-ping-rows {
+  gap: 6px;
 }
 
-.multi-ping-row-bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 1px;
-  height: 12px;
+.multi-ping-row {
+  display: grid;
+  grid-template-columns: minmax(84px, 0.45fr) repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  align-items: stretch;
 }
 
-.multi-ping-bars-stack {
+.multi-ping-row-name {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 2px;
+  min-width: 0;
+  align-items: center;
+  color: var(--n-text-color-2);
+  font-size: 11px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.multi-ping-placeholder {
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--n-border-color) 45%, transparent);
+  border-radius: 6px;
+  background-color: color-mix(in srgb, var(--n-color) 30%, transparent);
+}
+
+@media (max-width: 640px) {
+  .multi-ping-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .multi-ping-row-name {
+    grid-column: 1 / -1;
+  }
 }
 </style>

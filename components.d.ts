@@ -24,6 +24,7 @@ declare module 'vue' {
     NodeMultiPingHealth: typeof import('./src/components/NodeMultiPingHealth.vue')['default']
     NodePingHealth: typeof import('./src/components/NodePingHealth.vue')['default']
     PingChart: typeof import('./src/components/PingChart.vue')['default']
+    PingHistoryStrip: typeof import('./src/components/PingHistoryStrip.vue')['default']
     Provider: typeof import('./src/components/Provider.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']

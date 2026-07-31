@@ -1,3 +1,5 @@
+import carbon from '@iconify/json/json/carbon.json'
+import iconParkOutline from '@iconify/json/json/icon-park-outline.json'
 import presetWind4 from '@unocss/preset-wind4'
 import { defineConfig, presetIcons, transformerDirectives, transformerVariantGroup } from 'unocss'
 
@@ -6,6 +8,10 @@ export default defineConfig({
     presetWind4(),
     presetIcons({
       scale: 1.2,
+      collections: {
+        'carbon': () => carbon,
+        'icon-park-outline': () => iconParkOutline,
+      },
     }),
   ],
   transformers: [

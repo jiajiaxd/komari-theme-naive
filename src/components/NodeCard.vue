@@ -115,10 +115,12 @@ async function handleRemainingValueClick(event: MouseEvent): Promise<void> {
     window.$message?.error('复制失败，请重试')
 }
 
-// 是否在单独一行显示标签
-const shouldShowTagsInSeparateRow = computed(() => {
-  return appStore.tagsInSeparateRow && mergedTags.value.length > 0
+// 底部标签行：默认展示价格标签，开启配置后同时展示自定义标签
+const bottomTags = computed(() => {
+  return appStore.tagsInSeparateRow ? mergedTags.value : priceTags.value
 })
+
+const shouldShowTagsRow = computed(() => bottomTags.value.length > 0)
 
 const visibleMetrics = computed(() => new Set(appStore.cardMetrics))
 
@@ -292,6 +294,12 @@ function handleCardKeydown(event: KeyboardEvent): void {
               </div>
             </div>
 
+            <!-- 延迟/丢包 -->
+            <template v-if="appStore.showHomepagePing">
+              <NodeMultiPingHealth v-if="appStore.useHomepageMultiPing" :uuid="props.node.uuid" />
+              <NodePingHealth v-else :uuid="props.node.uuid" />
+            </template>
+
             <!-- 网络速率 -->
             <div class="flex-between">
               <NText :depth="3" class="text-[13px]">
@@ -302,32 +310,12 @@ function handleCardKeydown(event: KeyboardEvent): void {
               </div>
             </div>
 
-            <!-- 延迟/丢包 -->
-            <template v-if="appStore.showHomepagePing">
-              <NodeMultiPingHealth v-if="appStore.useHomepageMultiPing" :uuid="props.node.uuid" />
-              <NodePingHealth v-else :uuid="props.node.uuid" />
-            </template>
-
             <!-- 运行时间 -->
             <div class="uptime-row flex-between">
               <NText :depth="3" class="text-[13px]">
                 运行时间
               </NText>
               <div class="flex gap-2 items-center">
-                <!-- 当标签不在单独一行显示时，价格标签显示在运行时间行 -->
-                <template v-if="!shouldShowTagsInSeparateRow">
-                  <NTag
-                    v-for="(tag, index) in priceTags"
-                    :key="index"
-                    size="small"
-                    :class="{ 'cursor-pointer': tag.kind === 'remaining' }"
-                    :title="tag.kind === 'remaining' ? '点击复制剩余价值报告' : undefined"
-                    :color="{ color: `${tag.color}20`, textColor: tag.color, borderColor: `${tag.color}40` }"
-                    @click="tag.kind === 'remaining' ? handleRemainingValueClick($event) : undefined"
-                  >
-                    {{ tag.text }}
-                  </NTag>
-                </template>
                 <!-- 根据 uptimeTagWrap 配置选择显示方式 -->
                 <NTag v-if="appStore.uptimeTagWrap" size="small" :color="{ color: `#8b5cf620`, textColor: '#8b5cf6', borderColor: `#8b5cf640` }">
                   {{ formatUptime(props.node.uptime ?? 0) }}
@@ -338,14 +326,14 @@ function handleCardKeydown(event: KeyboardEvent): void {
               </div>
             </div>
 
-            <!-- 标签单独一行显示（当 tagsInSeparateRow 为 true 时） -->
-            <div v-if="shouldShowTagsInSeparateRow" class="tags-separate-row flex-between">
-              <NText :depth="3" class="text-[13px]">
+            <!-- 剩余天数、价格和剩余价值固定显示在底部一行 -->
+            <div v-if="shouldShowTagsRow" class="tags-bottom-row flex gap-2 items-center justify-end">
+              <NText v-if="appStore.tagsInSeparateRow" :depth="3" class="text-[13px] shrink-0">
                 标签
               </NText>
-              <div class="flex flex-wrap gap-1 items-center justify-end">
+              <div class="tags-bottom-row__content flex flex-1 flex-nowrap gap-1 min-w-0 items-center justify-end">
                 <NTag
-                  v-for="(tag, index) in mergedTags"
+                  v-for="(tag, index) in bottomTags"
                   :key="index"
                   size="small"
                   :class="{ 'cursor-pointer': tag.kind === 'remaining' }"
@@ -424,6 +412,19 @@ function handleCardKeydown(event: KeyboardEvent): void {
 .metric-grid {
   column-gap: 24px;
   row-gap: 16px;
+}
+
+.tags-bottom-row__content {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tags-bottom-row__content::-webkit-scrollbar {
+  display: none;
+}
+
+.tags-bottom-row__content :deep(.n-tag) {
+  flex: 0 0 auto;
 }
 
 .node-card--compact .metric-grid {
